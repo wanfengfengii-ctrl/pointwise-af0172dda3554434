@@ -26,6 +26,5 @@ def fit(archive, train_rev, largest, *, before_commit=None) -> str:
     basis = nullspace(shifted)
     if len(basis) not in (1, 2):
         raise FitInputError('the largest eigenspace must have dimension one or two')
-    representative = basis[0]
-    return publish_fit(archive, train_rev, batch.unit, center, value, (representative,),
+    return publish_fit(archive, train_rev, batch.unit, center, value, basis,
                        before_commit=before_commit)

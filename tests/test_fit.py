@@ -1,7 +1,27 @@
+from fractions import Fraction
+
+from measure.rationals import parse_rational
 from publish.commit import PublicationError
 from review.handoff import read_result
 from tests.support import ArchiveCase, OFFSET, X, Y, ZERO, training_rows
 from train.freeze import FitInputError, fit
+
+
+def _rank(vectors):
+    working = [list(vector) for vector in vectors]
+    rank = 0
+    for column in range(len(working[0])):
+        pivot = next((i for i in range(rank, len(working)) if working[i][column]), None)
+        if pivot is None:
+            continue
+        working[rank], working[pivot] = working[pivot], working[rank]
+        for index in range(rank + 1, len(working)):
+            if working[index][column]:
+                factor = working[index][column] / working[rank][column]
+                working[index] = [a - factor * b
+                                  for a, b in zip(working[index], working[rank], strict=True)]
+        rank += 1
+    return rank
 
 
 class FitTests(ArchiveCase):
@@ -21,6 +41,20 @@ class FitTests(ArchiveCase):
         self.assertEqual(view['center'], ['2/1', '-3/1', '1/2'])
         self.assertEqual(view['basis'], [['1/1', '0/1', '0/1'], ['0/1', '1/1', '0/1']])
         self.assertEqual((view['train_rev'], view['largest']), (train_rev, '1/2'))
+
+    def test_tied_space_keeps_a_full_oblique_basis(self):
+        p = tuple(Fraction(value, 3) for value in (2, 1, -2))
+        q = tuple(Fraction(value, 3) for value in (2, -2, 1))
+        train_rev = self.register('training', training_rows(ZERO, p, q))
+        fit_id = fit(self.archive, train_rev, '1/2')
+        view = read_result(self.archive, 'fit', fit_id)
+        self.assertEqual(len(view['basis']), 2)
+        columns = [tuple(parse_rational(value) for value in column) for column in view['basis']]
+        # Both declared directions lie in the span of the stored basis, so the
+        # whole tied plane (not merely one representative) survives the fit.
+        span_rank = _rank(columns + [p])
+        self.assertEqual(span_rank, 2)
+        self.assertEqual(_rank(columns + [q]), 2)
 
     def test_value_above_spectrum_does_not_publish(self):
         train_rev = self.register('training', training_rows(ZERO, X, Y))

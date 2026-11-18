@@ -93,3 +93,18 @@ class CoverageTests(ArchiveCase):
         _, fit_id, left, _ = self.fit_and_conditions(OFFSET, unique=True)
         two_rows = self.register('alternating response', [shifted(OFFSET, (2, 0, 0)), OFFSET])
         self.assertEqual(self._verdicts(fit_id, two_rows, left, [(2, 1), (2, '101/100')]), [True, False])
+
+    def test_separately_reachable_thresholds_are_not_jointly_reported(self):
+        # Left peaks on X, right on Y. Each reaches one on its own axis, but no
+        # single unit direction can, so a shared-axis report must fail.
+        _, fit_id, left, right = self.fit_and_conditions(OFFSET)
+        self.assertEqual(self._verdicts(fit_id, left, right, [(1, 1), ('1/2', '1/2'), (1, 0), (0, 1)]),
+                         [False, True, True, True])
+
+    def test_true_and_false_requests_both_keep_their_report(self):
+        _, fit_id, left, right = self.fit_and_conditions(OFFSET)
+        passing_id, passing = report(self.archive, fit_id, left, right, '1/2', '1/2')
+        failing_id, failing = report(self.archive, fit_id, left, right, 1, 1)
+        self.assertEqual((passing, failing), (True, False))
+        self.assertEqual(read_result(self.archive, 'report', passing_id)['passed'], True)
+        self.assertEqual(read_result(self.archive, 'report', failing_id)['passed'], False)
